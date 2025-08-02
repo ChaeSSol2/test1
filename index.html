@@ -1,0 +1,259 @@
+<!-- 전체 HTML 코드 -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>텍스트 성장 게임</title>
+  <link rel="manifest" href="manifest.json" />
+  <!-- PWA 설정 -->
+<meta name="theme-color" content="#000000" />
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js')
+      .then(function(registration) {
+        console.log('Service Worker 등록 성공:', registration.scope);
+      })
+      .catch(function(error) {
+        console.log('Service Worker 등록 실패:', error);
+      });
+  }
+</script>
+  <style>
+    body {
+      background-color: black;
+      color: white;
+      font-family: "돋움", sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    .tab {
+      display: none;
+      padding: 20px;
+    }
+    .tab.active {
+      display: block;
+    }
+    .tab-buttons {
+      display: flex;
+      justify-content: space-around;
+      background-color: #222;
+      border-bottom: 1px solid #444;
+    }
+    .tab-buttons button {
+      flex: 1;
+      background-color: #222;
+      color: white;
+      padding: 10px;
+      border: none;
+      font-size: 16px;
+    }
+    .info-top, .money-input {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .checklists {
+      display: flex;
+      gap: 20px;
+    }
+    .checklist {
+      border: 1px solid #555;
+      padding: 10px;
+      flex: 1;
+    }
+    .shop-item, .equip-slot, .owned-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    .equipment-container {
+      display: flex;
+      justify-content: space-between;
+    }
+    .left, .right {
+      width: 48%;
+    }
+  </style>
+</head>
+<body>
+  <div class="tab-buttons">
+    <button onclick="showTab('info')">정보</button>
+    <button onclick="showTab('shop')">상점</button>
+    <button onclick="showTab('equipment')">장비</button>
+  </div>
+
+  <div id="info" class="tab active">
+    <div class="info-top">
+      <div>닉네임: <input type="text" id="nicknameInput"></div>
+      <div id="levelDisplay">Lv. 260</div>
+      <div id="expDisplay">1,000,000,000 / 2,000,000,000 (50%)</div>
+    </div>
+    <div class="money-input">
+      <div>
+        보유한 돈 입력: 
+        <input type="number" id="moneyInput" />
+      </div>
+      <div id="moneyDisplay">보유한 메소: 0 메소</div>
+    </div>
+    <div class="checklists">
+      <div class="checklist">
+        <strong>오늘 할 일</strong><br>
+        <label><input type="checkbox" id="todo1" /> 일과1</label><br>
+        <label><input type="checkbox" id="todo2" /> 일과2</label>
+      </div>
+      <div class="checklist">
+        <strong>어제 한 일</strong><br>
+        <label><input type="checkbox" id="done1" /> 일과1</label><br>
+        <label><input type="checkbox" id="done2" /> 일과2</label>
+      </div>
+    </div>
+  </div>
+
+  <div id="shop" class="tab">
+    <h2>상점</h2>
+    <div id="shopItems"></div>
+  </div>
+
+  <div id="equipment" class="tab">
+    <h2>장비</h2>
+    <div class="equipment-container">
+      <div class="left">
+        <h3>착용 중인 장비</h3>
+        <div id="equippedItems"></div>
+      </div>
+      <div class="right">
+        <h3>보유 장비</h3>
+        <div id="ownedItems"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const shopItems = [
+      { name: "목검", price: 1000000, type: "무기" },
+      { name: "철 검", price: 5000000, type: "무기" },
+      { name: "히어로 메달", price: 10000000, type: "보조무기" },
+      { name: "팔라딘 메달", price: 10000000, type: "보조무기" },
+      { name: "히어로즈 엠블럼", price: 10000000, type: "엠블럼" },
+      { name: "모험가 엠블럼", price: 20000000, type: "엠블럼" },
+      { name: "철 모", price: 3000000, type: "투구" },
+      { name: "나무 투구", price: 4000000, type: "투구" },
+      { name: "방탄 조끼", price: 10000000, type: "갑옷" },
+      { name: "전투 조끼", price: 15000000, type: "갑옷" }
+    ];
+
+    let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
+    let equipped = JSON.parse(localStorage.getItem("equipped")) || {};
+    let nickname = localStorage.getItem("nickname") || "이채쏠";
+    let level = localStorage.getItem("level") || 260;
+    let exp = localStorage.getItem("exp") || 1000000000;
+    let maxExp = localStorage.getItem("maxExp") || 2000000000;
+    let money = parseInt(localStorage.getItem("money")) || 0;
+    let rawInputMoney = localStorage.getItem("rawInputMoney") || "";
+
+    document.getElementById("nicknameInput").value = nickname;
+    document.getElementById("nicknameInput").addEventListener("input", (e) => {
+      nickname = e.target.value;
+      localStorage.setItem("nickname", nickname);
+    });
+
+    document.getElementById("levelDisplay").innerText = "Lv. " + level;
+    document.getElementById("expDisplay").innerText = formatNumber(exp) + " / " + formatNumber(maxExp) + " (" + Math.floor(exp / maxExp * 100) + "%)";
+    document.getElementById("moneyInput").value = rawInputMoney;
+    document.getElementById("moneyDisplay").innerText = "보유한 메소: " + formatNumber(money) + " 메소";
+
+    document.getElementById("moneyInput").addEventListener("input", (e) => {
+      rawInputMoney = e.target.value;
+      money = parseInt(rawInputMoney) * 1000 || 0;
+      localStorage.setItem("rawInputMoney", rawInputMoney);
+      localStorage.setItem("money", money);
+      document.getElementById("moneyDisplay").innerText = "보유한 메소: " + formatNumber(money) + " 메소";
+    });
+
+    ["todo1", "todo2", "done1", "done2"].forEach(id => {
+      const checkbox = document.getElementById(id);
+      checkbox.checked = localStorage.getItem(id) === "true";
+      checkbox.addEventListener("change", () => {
+        localStorage.setItem(id, checkbox.checked);
+      });
+    });
+
+    function formatNumber(num) {
+      return Number(num).toLocaleString();
+    }
+
+    function showTab(tabName) {
+      document.querySelectorAll(".tab").forEach(tab => {
+        tab.classList.remove("active");
+      });
+      document.getElementById(tabName).classList.add("active");
+    }
+
+    function renderShop() {
+      const container = document.getElementById("shopItems");
+      container.innerHTML = "";
+      shopItems.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "shop-item";
+        div.innerHTML = `
+          <span>[${item.type}] ${item.name} - ${formatNumber(item.price)} 메소</span>
+          <button onclick="buyItem('${item.name}')">구매</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function buyItem(itemName) {
+      const item = shopItems.find(i => i.name === itemName);
+      if (money >= item.price) {
+        money -= item.price;
+        localStorage.setItem("money", money);
+        inventory.push(item);
+        localStorage.setItem("inventory", JSON.stringify(inventory));
+        document.getElementById("moneyDisplay").innerText = "보유한 메소: " + formatNumber(money) + " 메소";
+        renderInventory();
+      } else {
+        alert("메소가 부족합니다.");
+      }
+    }
+
+    function renderInventory() {
+      const owned = document.getElementById("ownedItems");
+      const equippedEl = document.getElementById("equippedItems");
+      owned.innerHTML = "";
+      equippedEl.innerHTML = "";
+
+      ["무기", "보조무기", "엠블럼", "투구", "갑옷"].forEach(type => {
+        const eq = equipped[type];
+        const div = document.createElement("div");
+        div.className = "equip-slot";
+        div.innerText = `[${type}] ${eq ? eq.name : "없음"}`;
+        equippedEl.appendChild(div);
+
+        inventory
+          .filter(item => item.type === type)
+          .forEach(item => {
+            const itemDiv = document.createElement("div");
+            itemDiv.className = "owned-item";
+            itemDiv.innerHTML = `
+              <span>${item.name}</span>
+              <button onclick="equipItem('${item.name}')">장착</button>
+            `;
+            owned.appendChild(itemDiv);
+          });
+      });
+    }
+
+    function equipItem(name) {
+      const item = inventory.find(i => i.name === name);
+      equipped[item.type] = item;
+      localStorage.setItem("equipped", JSON.stringify(equipped));
+      renderInventory();
+    }
+
+    renderShop();
+    renderInventory();
+  </script>
+</body>
+</html>
